@@ -19,3 +19,17 @@ dist/
 .idea/
 *.iml
 app/android/.kotlin/
+# Databases
+*.db
+*.sqlite3
+
+# Build & Cache Directories
+/app/build/
+.dart_tool/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local configuration & environment
+.env
+local.properties

@@ -2,7 +2,7 @@
 
 Interim implementation of the [implementation plan](IMPLEMENTATION_PLAN_EN.md): a Flutter app with older-adult and caregiver experiences, backed by a Python API. It covers accounts, family authorization, text conversations, short-term context, confirmed personal memories, official resource retrieval, private stories, and consented family messages.
 
-Cantonese voice, scheduled notifications, and crisis escalation belong to later stages. Personal retrieval supports a configurable embedding service; without credentials it is explicitly labelled keyword retrieval. The default conversational adapter is still a deterministic demo.
+The Android client also supports device-based Cantonese-prioritized speech input, optional local check-ins and due-task notifications, and a user-controlled safety assistance flow. Anxin receives recognized text rather than a recording, but the device/browser speech service may process microphone audio under its own policy. The app does not send automatic crisis alerts or provide emergency response. Personal retrieval supports a configurable embedding service; without credentials it is explicitly labelled keyword retrieval. The default conversational adapter is still a deterministic demo.
 
 For usage and demonstration steps, see the [English user guide](docs/USER_GUIDE_EN.md). A [Chinese guide](docs/USER_GUIDE_ZH.md) is also available.
 
@@ -93,6 +93,28 @@ that scope. Sharing a private story requires a recipient/content preview and
 confirmation. Retries reuse the original operation ID. Revoking a link blocks
 subsequent reads and sends, including retries. Message updates currently require
 refreshing the screen; push notifications belong to the following milestone.
+
+### Check-ins, reminders, and safety assistance
+
+On Android, users can opt in to daily or weekly check-ins and due-task
+notifications from **Account → Reminders and safety**. Notifications are stored
+and scheduled on that device, use its local time, and observe 21:00–09:00 quiet
+hours. A successful chat defers that day's check-in. Notification permission is
+required; reminders are not synchronized across devices or sent by the server.
+
+The chat client checks a small set of explicit English and Chinese danger
+phrases and displays a support panel. This is a keyword-based prompt, not a
+clinical assessment, and may miss or misread statements. It never contacts
+family automatically. The user can initiate a call to 999 or choose one
+currently authorized family-message recipient, preview the message, and
+confirm sending. This is not a 24-hour emergency service.
+
+The resource screen can search the reviewed Hong Kong collection by district;
+the 18-district elderly-centre entry links to the official SWD directory, which
+users should check directly for current contact details and availability.
+Bookings and welfare applications remain external integrations: the app gives
+guidance but does not submit applications, book appointments, or claim that a
+service has been contacted.
 
 ## Start the Flutter client
 

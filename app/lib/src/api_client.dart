@@ -3,7 +3,15 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'care_features_api.dart';
+import 'care_models.dart';
 import 'models.dart';
+
+export 'care_features_api.dart';
+
+// Re-export community and scam models so they are available alongside
+// the API interface.
+export 'models.dart' show CommunityActivity, ScamResource, ScamContact, VerifyAction, ScamLogEntry;
 
 /// The server origin is replaceable at build/run time:
 /// `flutter run --dart-define=API_ORIGIN=http://10.0.2.2:8000`.
@@ -124,6 +132,45 @@ abstract class AnxinApi {
     required String clientMessageId,
     String? sourceStoryId,
   });
+
+  // --- Guest access (FR ACC 01) ---
+
+  Future<AuthSession> guestLogin();
+
+  // --- Community discovery (FR CMT 01-05) ---
+
+  Future<List<CommunityActivity>> listCommunityActivities({
+    String? district,
+    String? interest,
+    String? contributionType,
+  });
+
+  Future<List<CommunityActivity>> communityRecommendations();
+
+  Future<void> expressCommunityInterest(String activityId);
+
+  Future<List<CommunityActivity>> listCommunityInterests();
+
+  Future<void> withdrawCommunityInterest(String activityId);
+
+  // --- Scam safety (FR SCM 01-04) ---
+
+  Future<List<ScamResource>> listScamResources({String? scamType});
+
+  Future<List<ScamResource>> searchScamResources(String query);
+
+  Future<List<VerifyAction>> getVerifyActions();
+
+  Future<List<ScamContact>> getScamContacts();
+
+  Future<void> logScamGuidance({
+    required String scamType,
+    required String guidanceSummary,
+    String? scamResourceId,
+    String? conversationId,
+  });
+
+  Future<List<ScamLogEntry>> listScamLogs();
 }
 
 class ApiException implements Exception {
@@ -139,7 +186,7 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-class RestApiClient implements AnxinApi {
+class RestApiClient implements AnxinApi, CareFeaturesApi {
   RestApiClient({
     String? origin,
     http.Client? client,
@@ -153,6 +200,102 @@ class RestApiClient implements AnxinApi {
   final http.Client _client;
   final Duration _requestTimeout;
   String? accessToken;
+
+  @override
+  Future<CheckInSchedule?> getCheckInSchedule() async {
+    final body = await _request('GET', '/check-ins/schedule');
+    if (body == null) return null;
+    return CheckInSchedule.fromJson(_requireCareObject(body));
+  }
+
+  @override
+  Future<CheckInSchedule> saveCheckInSchedule(CheckInSchedule schedule) async {
+    final body = await _request('PUT', '/check-ins/schedule', body: schedule.toJson());
+    return CheckInSchedule.fromJson(_requireCareObject(body));
+  }
+
+  @override
+  Future<void> skipCheckInToday() async {
+    await _request('POST', '/check-ins/skip');
+  }
+
+  @override
+  Future<CheckInTriggerResult> triggerCheckIn() async {
+    final body = await _request('POST', '/check-ins/trigger', body: {});
+    return CheckInTriggerResult.fromJson(_requireCareObject(body));
+  }
+
+  @override
+  Future<List<CareNotification>> listNotifications() async {
+    final body = await _request('GET', '/notifications');
+    return mapsFromJson(body).map(CareNotification.fromJson).toList();
+  }
+
+  @override
+  Future<CareNotification> updateNotification({
+    required String notificationId,
+    required CareNotificationAction status,
+  }) async {
+    final body = await _request(
+      'PATCH',
+      '/notifications/${Uri.encodeComponent(notificationId)}',
+      body: {'status': status.name},
+    );
+    return CareNotification.fromJson(_requireCareObject(body));
+  }
+
+  @override
+  Future<List<EmergencyContact>> listEmergencyContacts() async {
+    final body = await _request('GET', '/safety/emergency-contacts');
+    return mapsFromJson(body).map(EmergencyContact.fromJson).toList();
+  }
+
+  @override
+  Future<EmergencyContact> addEmergencyContact({
+    required String familyLinkId,
+    required String label,
+  }) async {
+    final body = await _request('POST', '/safety/emergency-contacts', body: {
+      'family_link_id': familyLinkId,
+      'label': label,
+    });
+    return EmergencyContact.fromJson(_requireCareObject(body));
+  }
+
+  @override
+  Future<void> deleteEmergencyContact(String contactId) async {
+    await _request('DELETE', '/safety/emergency-contacts/${Uri.encodeComponent(contactId)}');
+  }
+
+  @override
+  Future<List<SafetyEvent>> listSafetyEvents() async {
+    final body = await _request('GET', '/safety/events');
+    return mapsFromJson(body).map(SafetyEvent.fromJson).toList();
+  }
+
+  @override
+  Future<void> sendSupportRequest({
+    required String emergencyContactId,
+    required String message,
+    required String idempotencyKey,
+    String? safetyEventId,
+  }) async {
+    if (idempotencyKey.trim().isEmpty) {
+      throw ArgumentError.value(idempotencyKey, 'idempotencyKey', 'Must not be empty');
+    }
+    await _request('POST', '/safety/support-request', body: {
+      'emergency_contact_id': emergencyContactId,
+      'message': message,
+      'idempotency_key': idempotencyKey,
+      'safety_event_id': safetyEventId,
+    }, idempotencyKey: idempotencyKey);
+  }
+
+  static Map<String, dynamic> _requireCareObject(Object? body) {
+    final map = mapFromJson(body);
+    if (map == null) throw const ApiException('The care service returned an incomplete response.');
+    return map;
+  }
 
   Future<bool?> readDemoMode() async {
     final body = await _request('GET', '/health');
@@ -696,6 +839,128 @@ class RestApiClient implements AnxinApi {
     final message = FamilyMessage.fromJson(map);
     if (message.id.isEmpty) throw const ApiException('服務未回覆家庭訊息編號。');
     return message;
+  }
+
+  // --- Guest access (FR ACC 01) ---
+
+  @override
+  Future<AuthSession> guestLogin() async {
+    final body = await _request('POST', '/auth/guest');
+    final session = AuthSession.fromJson(mapFromJson(body) ?? const {});
+    _requireToken(session);
+    accessToken = session.accessToken;
+    return session;
+  }
+
+  // --- Community discovery (FR CMT 01-05) ---
+
+  @override
+  Future<List<CommunityActivity>> listCommunityActivities({
+    String? district,
+    String? interest,
+    String? contributionType,
+  }) async {
+    final params = <String, String>{};
+    if (district != null && district.isNotEmpty) params['district'] = district;
+    if (interest != null && interest.isNotEmpty) params['interest'] = interest;
+    if (contributionType != null && contributionType.isNotEmpty)
+      params['contribution_type'] = contributionType;
+    final path = params.isEmpty
+        ? '/community/activities'
+        : '/community/activities?${params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+    final body = await _request('GET', path);
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['activities'] ?? map);
+    return list.map(CommunityActivity.fromJson).where((a) => a.id.isNotEmpty).toList();
+  }
+
+  @override
+  Future<List<CommunityActivity>> communityRecommendations() async {
+    final body = await _request('GET', '/community/recommendations');
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['recommendations'] ?? map);
+    return list.map(CommunityActivity.fromJson).where((a) => a.id.isNotEmpty).toList();
+  }
+
+  @override
+  Future<void> expressCommunityInterest(String activityId) async {
+    await _request('POST', '/community/interest/${Uri.encodeComponent(activityId)}');
+  }
+
+  @override
+  Future<List<CommunityActivity>> listCommunityInterests() async {
+    final body = await _request('GET', '/community/interests');
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['interests'] ?? map);
+    return list.map(CommunityActivity.fromJson).where((a) => a.id.isNotEmpty).toList();
+  }
+
+  @override
+  Future<void> withdrawCommunityInterest(String activityId) async {
+    await _request('DELETE', '/community/interest/${Uri.encodeComponent(activityId)}');
+  }
+
+  // --- Scam safety (FR SCM 01-04) ---
+
+  @override
+  Future<List<ScamResource>> listScamResources({String? scamType}) async {
+    final path = scamType != null && scamType.isNotEmpty
+        ? '/scam/resources?scam_type=${Uri.encodeComponent(scamType)}'
+        : '/scam/resources';
+    final body = await _request('GET', path);
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['resources'] ?? map);
+    return list.map(ScamResource.fromJson).where((r) => r.id.isNotEmpty).toList();
+  }
+
+  @override
+  Future<List<ScamResource>> searchScamResources(String query) async {
+    final body = await _request(
+      'GET',
+      '/scam/resources/search?query=${Uri.encodeComponent(query)}',
+    );
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['results'] ?? map);
+    return list.map(ScamResource.fromJson).where((r) => r.id.isNotEmpty).toList();
+  }
+
+  @override
+  Future<List<VerifyAction>> getVerifyActions() async {
+    final body = await _request('GET', '/scam/verify-actions');
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['actions'] ?? map);
+    return list.map(VerifyAction.fromJson).toList();
+  }
+
+  @override
+  Future<List<ScamContact>> getScamContacts() async {
+    final body = await _request('GET', '/scam/contacts');
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['contacts'] ?? map);
+    return list.map(ScamContact.fromJson).toList();
+  }
+
+  @override
+  Future<void> logScamGuidance({
+    required String scamType,
+    required String guidanceSummary,
+    String? scamResourceId,
+    String? conversationId,
+  }) async {
+    await _request('POST', '/scam/log', body: {
+      'scam_type': scamType,
+      'guidance_summary': guidanceSummary,
+      if (scamResourceId != null) 'scam_resource_id': scamResourceId,
+      if (conversationId != null) 'conversation_id': conversationId,
+    });
+  }
+
+  @override
+  Future<List<ScamLogEntry>> listScamLogs() async {
+    final body = await _request('GET', '/scam/log');
+    final map = mapFromJson(body) ?? const <String, dynamic>{};
+    final list = mapsFromJson(map['logs'] ?? map);
+    return list.map(ScamLogEntry.fromJson).toList();
   }
 }
 

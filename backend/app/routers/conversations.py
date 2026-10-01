@@ -15,6 +15,7 @@ from ..models import Account, ActionProposal, Conversation, Message
 from ..memory_models import PersonalMemory
 from ..memory_service import retrieve_for_chat, propose_from_message, memory_revision
 from ..resource_service import search_resources
+from ..safety_models import SafetyEvent
 from ..schemas import (
     ActionOut,
     ConversationCreate,
@@ -127,7 +128,7 @@ def _replay_send(db: Session, conversation: Conversation, user_message: Message)
     action_id = metadata.get("action_id")
     action = db.get(ActionProposal, action_id) if action_id else None
     mode = metadata.get("mode")
-    if mode not in {"deterministic_demo", "openai_compatible", "error"}:
+    if mode not in {"deterministic_demo", "openai_compatible", "error", "safety_intervention"}:
         mode = "error"
     return SendMessageOut(
         conversation=_conversation_out(conversation),
@@ -319,6 +320,7 @@ async def send_message(
         ordinal=next_ordinal + 1,
     )
     action = None
+    safety_event = None
     try:
         db.add_all([user_message, assistant_message])
         db.flush()
@@ -330,6 +332,23 @@ async def send_message(
                     "candidate_memory_id": candidate.id,
                 }
                 assistant_message.content += "\n已整理成待確認記憶；請到「記憶」核對，確認前不會用作長期回憶。"
+        # When the safety node intercepted the conversation, persist a
+        # SafetyEvent so the elder can review when interventions occurred.
+        # The event is private: caregivers never see safety events.
+        if reply.mode == "safety_intervention" and account.role == "elder":
+            safety_event = SafetyEvent(
+                elder_id=owner_id,
+                conversation_id=conversation.id,
+                trigger_message=payload.content[:5000],
+                intervention_mode="safety_intervention",
+                support_request_sent=False,
+            )
+            db.add(safety_event)
+            db.flush()
+            assistant_message.metadata_json = {
+                **dict(assistant_message.metadata_json or {}),
+                "safety_event_id": safety_event.id,
+            }
         if reply.proposed_task is not None:
             action = ActionProposal(
                 conversation_id=conversation.id,

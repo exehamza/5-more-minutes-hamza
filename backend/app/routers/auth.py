@@ -51,6 +51,43 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     return TokenResponse(access_token=token, account=AccountPublic.model_validate(account))
 
 
+@router.post("/guest", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def create_guest(request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    """Create a temporary guest elder account for trial without registration.
+
+    FR ACC 01: The elder can start a conversation without providing an email
+    or password.  A guest account is a real account with a random email and
+    a random password that the guest never sees.  Guests can later convert
+    to a permanent account by registering with a real email and password.
+
+    Guest accounts have the same data isolation as registered accounts.
+    """
+    import secrets as _secrets
+
+    random_suffix = _secrets.token_hex(8)
+    guest_email = f"guest_{random_suffix}@anxin.local"
+    guest_password = _secrets.token_urlsafe(32)
+    guest_name = "訪客"
+    account = Account(
+        email=guest_email,
+        password_hash=hash_password(guest_password),
+        display_name=guest_name,
+        role="elder",
+    )
+    db.add(account)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to create guest session")
+    token = create_access_token(
+        account.id,
+        request.app.state.settings.auth_secret,
+        request.app.state.settings.access_token_ttl_seconds,
+    )
+    return TokenResponse(access_token=token, account=AccountPublic.model_validate(account))
+
+
 @router.get("/me", response_model=AccountPublic)
 def me(account: Account = Depends(get_current_account)) -> AccountPublic:
     return AccountPublic.model_validate(account)

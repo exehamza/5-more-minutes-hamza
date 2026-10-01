@@ -4,13 +4,19 @@ import 'package:flutter/foundation.dart';
 
 import 'api_client.dart';
 import 'models.dart';
+import 'reminders.dart';
 import 'storage.dart';
 
 class AppController extends ChangeNotifier {
-  AppController({required this.api, required this.sessionStore});
+  AppController({
+    required this.api,
+    required this.sessionStore,
+    this.reminderScheduler,
+  });
 
   final AnxinApi api;
   final SessionStore sessionStore;
+  final ReminderScheduler? reminderScheduler;
 
   AuthSession? session;
   bool initialized = false;
@@ -29,6 +35,13 @@ class AppController extends ChangeNotifier {
   List<ResourceConflict> resourceConflicts = const [];
   String? resourceRetrievalMode;
   List<FamilyMessage> familyMessages = const [];
+  List<CommunityActivity> communityActivities = const [];
+  List<CommunityActivity> communityRecommendations = const [];
+  List<CommunityActivity> communityInterests = const [];
+  List<ScamResource> scamResources = const [];
+  List<VerifyAction> verifyActions = const [];
+  List<ScamContact> scamContacts = const [];
+  List<ScamLogEntry> scamLogs = const [];
   final Map<String, String> drafts = {};
   final List<ActionProposal> pendingActions = [];
   final Set<String> sendingConversationIds = <String>{};
@@ -52,7 +65,8 @@ class AppController extends ChangeNotifier {
 
   bool get _canUseFamilyMessages => links.any(
         (link) =>
-            link.status == InvitationStatus.accepted && link.allowsFamilyMessages,
+            link.status == InvitationStatus.accepted &&
+            link.allowsFamilyMessages,
       );
 
   /// Active links with the family_messages grant are the only valid message
@@ -61,7 +75,8 @@ class AppController extends ChangeNotifier {
   List<FamilyInvitation> get familyMessageLinks => links
       .where(
         (link) =>
-            link.status == InvitationStatus.accepted && link.allowsFamilyMessages,
+            link.status == InvitationStatus.accepted &&
+            link.allowsFamilyMessages,
       )
       .toList(growable: false);
 
@@ -132,7 +147,8 @@ class AppController extends ChangeNotifier {
     if (restApi is! RestApiClient || session == null) return;
     try {
       final mode = await restApi.readDemoMode();
-      if (mode == null || generation != _sessionGeneration || session == null) return;
+      if (mode == null || generation != _sessionGeneration || session == null)
+        return;
       if (session!.demoMode != mode) {
         session = AuthSession(
           accessToken: session!.accessToken,
@@ -153,7 +169,8 @@ class AppController extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
     try {
-      final nextSession = await api.login(email: email.trim(), password: password);
+      final nextSession =
+          await api.login(email: email.trim(), password: password);
       await _setSession(nextSession);
       await _refreshDemoMode(_sessionGeneration);
       await refreshHome(silent: true);
@@ -196,6 +213,25 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<bool> guestLogin() async {
+    loading = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final nextSession = await api.guestLogin();
+      await _setSession(nextSession);
+      await _refreshDemoMode(_sessionGeneration);
+      await refreshHome(silent: true);
+      return true;
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      return false;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> _setSession(AuthSession nextSession) async {
     _sessionGeneration += 1;
     session = nextSession;
@@ -206,9 +242,17 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final currentUserId = user?.id;
     _sessionGeneration += 1;
     loading = true;
     notifyListeners();
+    if (currentUserId != null) {
+      try {
+        await reminderScheduler?.cancelUserNotifications(currentUserId);
+      } on Object catch (error) {
+        errorMessage = _messageFor(error);
+      }
+    }
     try {
       await api.logout();
     } on ApiException catch (error) {
@@ -231,6 +275,13 @@ class AppController extends ChangeNotifier {
       resourceConflicts = const [];
       resourceRetrievalMode = null;
       familyMessages = const [];
+      communityActivities = const [];
+      communityRecommendations = const [];
+      communityInterests = const [];
+      scamResources = const [];
+      verifyActions = const [];
+      scamContacts = const [];
+      scamLogs = const [];
       pendingActions.clear();
       drafts.clear();
       _draftClientIds.clear();
@@ -275,6 +326,11 @@ class AppController extends ChangeNotifier {
       tasks = foundation[0] as List<CareTask>;
       invitations = foundation[1] as List<FamilyInvitation>;
       links = foundation[2] as List<FamilyInvitation>;
+      try {
+        await reminderScheduler?.syncDueTasks(user!.id, tasks);
+      } on Object catch (error) {
+        errors.add(_messageFor(error));
+      }
       if (isElder && foundation.length > 3) {
         conversations = foundation[3] as List<Conversation>;
         await _restorePendingActions(conversations, generation);
@@ -363,7 +419,8 @@ class AppController extends ChangeNotifier {
       final conversation = await api.createConversation();
       if (generation != _sessionGeneration || session == null) return null;
       conversations = [conversation, ...conversations];
-      messagesByConversation.putIfAbsent(conversation.id, () => <ChatMessage>[]);
+      messagesByConversation.putIfAbsent(
+          conversation.id, () => <ChatMessage>[]);
       notifyListeners();
       return conversation;
     } on ApiException catch (error) {
@@ -385,7 +442,8 @@ class AppController extends ChangeNotifier {
       if (generation != _sessionGeneration || session == null) return;
       messagesByConversation[conversationId] = loadedMessages;
       for (final action in loadedActions) {
-        if (!pendingActions.any((item) => item.id == action.id)) pendingActions.add(action);
+        if (!pendingActions.any((item) => item.id == action.id))
+          pendingActions.add(action);
       }
     } on ApiException catch (error) {
       errorMessage = error.message;
@@ -400,10 +458,13 @@ class AppController extends ChangeNotifier {
 
   Future<String?> readDraft(String conversationId) async {
     if (drafts.containsKey(conversationId)) return drafts[conversationId];
-    final value = await sessionStore.readDraft(conversationId, userId: user?.id);
+    final value =
+        await sessionStore.readDraft(conversationId, userId: user?.id);
     if (value != null) drafts[conversationId] = value;
-    final clientId = await sessionStore.readDraftClientId(conversationId, userId: user?.id);
-    if (clientId != null && clientId.isNotEmpty) _draftClientIds[conversationId] = clientId;
+    final clientId =
+        await sessionStore.readDraftClientId(conversationId, userId: user?.id);
+    if (clientId != null && clientId.isNotEmpty)
+      _draftClientIds[conversationId] = clientId;
     return value;
   }
 
@@ -421,7 +482,8 @@ class AppController extends ChangeNotifier {
     if (previous != draft || !_draftClientIds.containsKey(conversationId)) {
       final clientId = _newClientId('message-draft');
       _draftClientIds[conversationId] = clientId;
-      await sessionStore.saveDraftClientId(conversationId, clientId, userId: user?.id);
+      await sessionStore.saveDraftClientId(conversationId, clientId,
+          userId: user?.id);
     }
     await sessionStore.saveDraft(conversationId, draft, userId: user?.id);
     notifyListeners();
@@ -431,7 +493,9 @@ class AppController extends ChangeNotifier {
     required String conversationId,
     required String content,
   }) async {
-    if (!isElder || content.trim().isEmpty || sendingConversationIds.contains(conversationId)) {
+    if (!isElder ||
+        content.trim().isEmpty ||
+        sendingConversationIds.contains(conversationId)) {
       return false;
     }
     final trimmed = content.trim();
@@ -460,7 +524,8 @@ class AppController extends ChangeNotifier {
             isFromUser: true,
             createdAt: DateTime.now(),
           );
-      if (!existing.any((message) => message.id == userMessage.id)) existing.add(userMessage);
+      if (!existing.any((message) => message.id == userMessage.id))
+        existing.add(userMessage);
       final assistantMessage = result.assistantMessage;
       if (assistantMessage != null &&
           !existing.any((message) => message.id == assistantMessage.id)) {
@@ -497,6 +562,11 @@ class AppController extends ChangeNotifier {
       await sessionStore.clearDraftClientId(conversationId, userId: user?.id);
       drafts.remove(conversationId);
       _draftClientIds.remove(conversationId);
+      try {
+        await reminderScheduler?.markConversationActivity(user!.id);
+      } on Object catch (error) {
+        errorMessage = _messageFor(error);
+      }
       notifyListeners();
       return true;
     } on ApiException catch (error) {
@@ -522,6 +592,11 @@ class AppController extends ChangeNotifier {
         for (final item in tasks)
           if (item.id == updated.id) updated else item,
       ];
+      try {
+        await reminderScheduler?.syncDueTasks(user!.id, tasks);
+      } on Object catch (error) {
+        errorMessage = _messageFor(error);
+      }
       notifyListeners();
       return true;
     } on ApiException catch (error) {
@@ -554,6 +629,11 @@ class AppController extends ChangeNotifier {
       _actionClientIds.remove(action.id);
       if (task != null && !tasks.any((item) => item.id == task.id)) {
         tasks = [task, ...tasks];
+        try {
+          await reminderScheduler?.syncDueTasks(user!.id, tasks);
+        } on Object catch (error) {
+          errorMessage = _messageFor(error);
+        }
       }
       notifyListeners();
       return true;
@@ -620,7 +700,8 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<bool> acceptInvitation(FamilyInvitation invitation, {String? token}) async {
+  Future<bool> acceptInvitation(FamilyInvitation invitation,
+      {String? token}) async {
     final invitationToken = (token ?? invitation.token ?? '').trim();
     if (invitationToken.isEmpty) {
       errorMessage = '請輸入邀請碼，服務才可以確認這個連結。';
@@ -637,7 +718,10 @@ class AppController extends ChangeNotifier {
         token: invitationToken,
       );
       if (generation != _sessionGeneration || session == null) return false;
-      invitations = [for (final item in invitations) if (item.id != invitation.id && item.id != accepted.id) item];
+      invitations = [
+        for (final item in invitations)
+          if (item.id != invitation.id && item.id != accepted.id) item
+      ];
       links = [accepted, ...links.where((item) => item.id != accepted.id)];
       notifyListeners();
       return true;
@@ -682,7 +766,10 @@ class AppController extends ChangeNotifier {
           else
             item,
       ];
-      links = [for (final item in links) if (item.id != invitation.id) item];
+      links = [
+        for (final item in links)
+          if (item.id != invitation.id) item
+      ];
       notifyListeners();
       return true;
     } on ApiException catch (error) {
@@ -756,7 +843,10 @@ class AppController extends ChangeNotifier {
         sourceMessageId: sourceMessageId,
       );
       if (generation != _sessionGeneration || session == null) return false;
-      memories = [created, ...memories.where((memory) => memory.id != created.id)];
+      memories = [
+        created,
+        ...memories.where((memory) => memory.id != created.id)
+      ];
       memorySearchResults = [
         for (final memory in memorySearchResults)
           if (memory.id != created.id) memory,
@@ -814,7 +904,10 @@ class AppController extends ChangeNotifier {
     try {
       await api.deleteMemory(memory.id);
       if (generation != _sessionGeneration || session == null) return false;
-      memories = [for (final item in memories) if (item.id != memory.id) item];
+      memories = [
+        for (final item in memories)
+          if (item.id != memory.id) item
+      ];
       memorySearchResults = [
         for (final item in memorySearchResults)
           if (item.id != memory.id) item,
@@ -864,7 +957,8 @@ class AppController extends ChangeNotifier {
       stories = [
         for (final story in stories)
           if (!story.memoryIds.contains(memoryId) &&
-              !story.memoryIds.contains(updated.id)) story,
+              !story.memoryIds.contains(updated.id))
+            story,
       ];
       notifyListeners();
       return true;
@@ -907,7 +1001,8 @@ class AppController extends ChangeNotifier {
     required String content,
     List<String> memoryIds = const [],
   }) async {
-    if (!isElder || title.trim().isEmpty || content.trim().isEmpty) return false;
+    if (!isElder || title.trim().isEmpty || content.trim().isEmpty)
+      return false;
     final generation = _sessionGeneration;
     loading = true;
     errorMessage = null;
@@ -941,7 +1036,10 @@ class AppController extends ChangeNotifier {
     try {
       await api.deleteStory(story.id);
       if (generation != _sessionGeneration || session == null) return false;
-      stories = [for (final item in stories) if (item.id != story.id) item];
+      stories = [
+        for (final item in stories)
+          if (item.id != story.id) item
+      ];
       notifyListeners();
       return true;
     } on ApiException catch (error) {
@@ -1077,6 +1175,214 @@ class AppController extends ChangeNotifier {
     } finally {
       _sendingFamilyMessageKeys.remove(operationKey);
       loading = false;
+      notifyListeners();
+    }
+  }
+
+  // --- Community discovery (FR CMT 01-05) ---
+
+  Future<void> refreshCommunityActivities({bool silent = false}) async {
+    final generation = _sessionGeneration;
+    if (!silent) {
+      loading = true;
+      errorMessage = null;
+      notifyListeners();
+    }
+    try {
+      final loaded = await api.listCommunityActivities();
+      if (generation != _sessionGeneration || session == null) return;
+      communityActivities = loaded;
+      notifyListeners();
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+    } finally {
+      if (!silent) {
+        loading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> refreshCommunityRecommendations({bool silent = false}) async {
+    if (!isElder) return;
+    final generation = _sessionGeneration;
+    if (!silent) {
+      loading = true;
+      errorMessage = null;
+      notifyListeners();
+    }
+    try {
+      final loaded = await api.communityRecommendations();
+      if (generation != _sessionGeneration || session == null) return;
+      communityRecommendations = loaded;
+      notifyListeners();
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+    } finally {
+      if (!silent) {
+        loading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<bool> expressInterest(CommunityActivity activity) async {
+    if (!isElder) return false;
+    final generation = _sessionGeneration;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      await api.expressCommunityInterest(activity.id);
+      if (generation != _sessionGeneration || session == null) return false;
+      await refreshCommunityInterests(silent: true);
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> withdrawInterest(CommunityActivity activity) async {
+    if (!isElder) return false;
+    final generation = _sessionGeneration;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      await api.withdrawCommunityInterest(activity.id);
+      if (generation != _sessionGeneration || session == null) return false;
+      await refreshCommunityInterests(silent: true);
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> refreshCommunityInterests({bool silent = false}) async {
+    if (!isElder) return;
+    final generation = _sessionGeneration;
+    try {
+      final loaded = await api.listCommunityInterests();
+      if (generation != _sessionGeneration || session == null) return;
+      communityInterests = loaded;
+      notifyListeners();
+    } on ApiException catch (error) {
+      if (!silent) errorMessage = error.message;
+      notifyListeners();
+    }
+  }
+
+  // --- Scam safety (FR SCM 01-04) ---
+
+  Future<void> refreshScamResources({bool silent = false}) async {
+    final generation = _sessionGeneration;
+    if (!silent) {
+      loading = true;
+      errorMessage = null;
+      notifyListeners();
+    }
+    try {
+      final loaded = await api.listScamResources();
+      if (generation != _sessionGeneration || session == null) return;
+      scamResources = loaded;
+      notifyListeners();
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+    } finally {
+      if (!silent) {
+        loading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<List<ScamResource>> searchScamResources(String query) async {
+    if (query.trim().isEmpty) return const [];
+    final generation = _sessionGeneration;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final results = await api.searchScamResources(query.trim());
+      if (generation != _sessionGeneration || session == null) return const [];
+      return results;
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+      return const [];
+    }
+  }
+
+  Future<void> refreshVerifyActions({bool silent = true}) async {
+    final generation = _sessionGeneration;
+    try {
+      final loaded = await api.getVerifyActions();
+      if (generation != _sessionGeneration || session == null) return;
+      verifyActions = loaded;
+      notifyListeners();
+    } on ApiException catch (error) {
+      if (!silent) errorMessage = error.message;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshScamContacts({bool silent = true}) async {
+    final generation = _sessionGeneration;
+    try {
+      final loaded = await api.getScamContacts();
+      if (generation != _sessionGeneration || session == null) return;
+      scamContacts = loaded;
+      notifyListeners();
+    } on ApiException catch (error) {
+      if (!silent) errorMessage = error.message;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> logScamGuidance({
+    required String scamType,
+    required String guidanceSummary,
+    String? scamResourceId,
+    String? conversationId,
+  }) async {
+    if (!isElder) return false;
+    final generation = _sessionGeneration;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      await api.logScamGuidance(
+        scamType: scamType,
+        guidanceSummary: guidanceSummary,
+        scamResourceId: scamResourceId,
+        conversationId: conversationId,
+      );
+      if (generation != _sessionGeneration || session == null) return false;
+      await refreshScamLogs(silent: true);
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      errorMessage = error.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> refreshScamLogs({bool silent = true}) async {
+    if (!isElder) return;
+    final generation = _sessionGeneration;
+    try {
+      final loaded = await api.listScamLogs();
+      if (generation != _sessionGeneration || session == null) return;
+      scamLogs = loaded;
+      notifyListeners();
+    } on ApiException catch (error) {
+      if (!silent) errorMessage = error.message;
       notifyListeners();
     }
   }

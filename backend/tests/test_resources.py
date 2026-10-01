@@ -154,6 +154,12 @@ def test_every_seed_source_has_provenance_complete_conditions_and_three_steps() 
     directory = next(record for record in service.records if record.id == "swd-elderly-centres-directory-2026-05")
     assert len(directory.districts) == 18
     assert {"Central and Western", "Eastern", "Yuen Long"}.issubset(directory.districts)
+    for district in directory.districts:
+        result = service.search(f"{district} elderly centre")
+        assert any(
+            item.id == "swd-elderly-centres-directory-2026-05"
+            for item in result.items
+        ), district
 
 
 def test_conflicting_verified_records_are_reported_without_choosing_a_winner() -> None:

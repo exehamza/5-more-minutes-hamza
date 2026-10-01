@@ -13,7 +13,10 @@ from .orchestrator import ConversationOrchestrator
 from .routers import actions, auth, conversations, family, tasks
 from .routers import family_messages
 from .routers import memories, stories, resources
+from .routers import safety, check_ins, speech
+from .routers import community, scam
 from .resource_service import seed_resources
+from .seed_extras import seed_community_activities, seed_scam_resources
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -27,10 +30,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         initialize_database(app.state.engine)
         with app.state.session_factory() as db:
             seed_resources(db)
+            seed_community_activities(db)
+            seed_scam_resources(db)
         yield
         app.state.engine.dispose()
 
-    app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title=settings.app_name, version="0.3.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
@@ -55,6 +60,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(conversations.router)
     app.include_router(actions.router)
     app.include_router(tasks.router)
+    app.include_router(safety.router)
+    app.include_router(check_ins.router)
+    app.include_router(speech.router)
+    app.include_router(community.router)
+    app.include_router(scam.router)
 
     @app.get("/health", tags=["system"])
     def health() -> dict[str, object]:

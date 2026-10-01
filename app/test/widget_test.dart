@@ -10,16 +10,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'helpers.dart';
 
 void main() {
-  testWidgets('elder can sign in and sees private chat navigation', (tester) async {
+  testWidgets('elder can sign in and sees private chat navigation',
+      (tester) async {
     final fakeApi = FakeApi(role: UserRole.elder);
-    final controller = AppController(api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appControllerProvider.overrideWith((ref) => controller)],
         child: const AnxinApp(),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('登入安心伴'), findsOneWidget);
 
     final fields = find.byType(TextFormField);
@@ -35,9 +37,11 @@ void main() {
     expect(find.text('安心伴 · 長者'), findsOneWidget);
   });
 
-  testWidgets('caregiver shell has shared tasks and no private chat tab', (tester) async {
+  testWidgets('caregiver shell has shared tasks and no private chat tab',
+      (tester) async {
     final fakeApi = FakeApi(role: UserRole.caregiver);
-    final controller = AppController(api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appControllerProvider.overrideWith((ref) => controller)],
@@ -45,7 +49,8 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.enterText(find.byType(TextFormField).at(0), 'caregiver@example.com');
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'caregiver@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'password123');
     await tester.tap(find.text('登入安心伴'));
     await tester.pumpAndSettle();
@@ -56,8 +61,11 @@ void main() {
     expect(find.text('長者私密對話'), findsNothing);
   });
 
-  testWidgets('login error stays visible and does not create a fake session', (tester) async {
-    final controller = AppController(api: _FailingLoginApi(), sessionStore: SessionStore(MemoryLocalStore()));
+  testWidgets('login error stays visible and does not create a fake session',
+      (tester) async {
+    final controller = AppController(
+        api: _FailingLoginApi(),
+        sessionStore: SessionStore(MemoryLocalStore()));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appControllerProvider.overrideWith((ref) => controller)],
@@ -65,7 +73,8 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.enterText(find.byType(TextFormField).at(0), 'elder@example.com');
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'elder@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'password123');
     await tester.tap(find.text('登入安心伴'));
     await tester.pumpAndSettle();
@@ -74,9 +83,11 @@ void main() {
     expect(find.text('登入安心伴'), findsOneWidget);
   });
 
-  testWidgets('elder opens memory management from home without auto saving', (tester) async {
+  testWidgets('elder opens memory management from home without auto saving',
+      (tester) async {
     final fakeApi = FakeApi(role: UserRole.elder);
-    final controller = AppController(api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appControllerProvider.overrideWith((ref) => controller)],
@@ -84,7 +95,8 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.enterText(find.byType(TextFormField).at(0), 'elder@example.com');
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'elder@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'password123');
     await tester.tap(find.text('登入安心伴'));
     await tester.pumpAndSettle();
@@ -98,7 +110,9 @@ void main() {
     expect(find.textContaining('目前沒有記憶'), findsOneWidget);
   });
 
-  testWidgets('family message requires scope and an explicit preview confirmation', (tester) async {
+  testWidgets(
+      'family message requires scope and an explicit preview confirmation',
+      (tester) async {
     final fakeApi = FakeApi(role: UserRole.elder)
       ..fakeLinks.add(
         const FamilyInvitation(
@@ -111,7 +125,8 @@ void main() {
           caregiverId: 'caregiver-1',
         ),
       );
-    final controller = AppController(api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appControllerProvider.overrideWith((ref) => controller)],
@@ -119,7 +134,8 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.enterText(find.byType(TextFormField).at(0), 'elder@example.com');
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'elder@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'password123');
     await tester.tap(find.text('登入安心伴'));
     await tester.pumpAndSettle();
@@ -139,9 +155,11 @@ void main() {
     expect(find.text('記得飲水'), findsOneWidget);
   });
 
-  testWidgets('family invitation permission is opt in and unchecked by default', (tester) async {
+  testWidgets('family invitation permission is opt in and unchecked by default',
+      (tester) async {
     final fakeApi = FakeApi(role: UserRole.elder);
-    final controller = AppController(api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appControllerProvider.overrideWith((ref) => controller)],
@@ -149,14 +167,155 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.enterText(find.byType(TextFormField).at(0), 'elder@example.com');
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'elder@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'password123');
     await tester.tap(find.text('登入安心伴'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('家庭'));
     await tester.pumpAndSettle();
-    final permission = tester.widget<CheckboxListTile>(find.byType(CheckboxListTile));
+    final permission =
+        tester.widget<CheckboxListTile>(find.byType(CheckboxListTile));
     expect(permission.value, isFalse);
+  });
+
+  testWidgets(
+      'chat composer exposes Cantonese voice input without sending audio',
+      (tester) async {
+    final fakeApi = FakeApi(role: UserRole.elder);
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    const conversation = Conversation(id: 'voice-chat', title: 'Voice chat');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appControllerProvider.overrideWith((ref) => controller)],
+        child: const MaterialApp(
+            home: ChatDetailScreen(conversation: conversation)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('cantonese-voice-input')), findsOneWidget);
+    expect(find.byTooltip('Cantonese voice input'), findsOneWidget);
+    expect(
+        fakeApi.fakeMessages['voice-chat'] ?? const <ChatMessage>[], isEmpty);
+  });
+
+  testWidgets('urgent chat statement shows support without contacting family',
+      (tester) async {
+    final fakeApi = FakeApi(role: UserRole.elder);
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    const conversation = Conversation(id: 'safety-chat', title: 'Safety chat');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appControllerProvider.overrideWith((ref) => controller)],
+        child: const MaterialApp(
+            home: ChatDetailScreen(conversation: conversation)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'I want to kill myself');
+    await tester.tap(find.byTooltip('Send message'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('You do not have to face this alone'), findsOneWidget);
+    expect(find.text('Call 999'), findsOneWidget);
+    expect(fakeApi.fakeFamilyMessages, isEmpty);
+  });
+
+  testWidgets('voice disclosure appears before the speech service is used',
+      (tester) async {
+    final fakeApi = FakeApi(role: UserRole.elder);
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    const conversation = Conversation(id: 'voice-consent', title: 'Voice chat');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appControllerProvider.overrideWith((ref) => controller)],
+        child: const MaterialApp(
+            home: ChatDetailScreen(conversation: conversation)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('cantonese-voice-input')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('processed by that speech service'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(
+        find.textContaining('processed by that speech service'), findsNothing);
+  });
+
+  testWidgets(
+      'support request previews one authorized recipient before sending',
+      (tester) async {
+    final fakeApi = FakeApi(role: UserRole.elder)
+      ..fakeLinks.add(
+        const FamilyInvitation(
+          id: 'safety-link',
+          email: 'caregiver@example.com',
+          name: 'Caregiver',
+          status: InvitationStatus.accepted,
+          scopes: ['care_tasks', 'family_messages'],
+          elderId: 'elder-1',
+          caregiverId: 'caregiver-1',
+        ),
+      );
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    await controller.login(email: 'elder@example.com', password: 'password123');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appControllerProvider.overrideWith((ref) => controller)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SafetySupportCard(links: controller.familyMessageLinks),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Ask one family member for support'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose one authorized family member'), findsOneWidget);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Review support request'), findsOneWidget);
+    expect(find.text('Recipient: Caregiver'), findsOneWidget);
+    expect(fakeApi.fakeFamilyMessages, isEmpty);
+
+    await tester.tap(find.text('Confirm and send'));
+    await tester.pumpAndSettle();
+    expect(fakeApi.fakeFamilyMessages, hasLength(1));
+  });
+
+  testWidgets('district selection searches the official elderly-centre record',
+      (tester) async {
+    final fakeApi = FakeApi(role: UserRole.elder);
+    final controller = AppController(
+        api: fakeApi, sessionStore: SessionStore(MemoryLocalStore()));
+    await controller.login(email: 'elder@example.com', password: 'password123');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appControllerProvider.overrideWith((ref) => controller)],
+        child: const MaterialApp(home: ResourcesScreen()),
+      ),
+    );
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kwun Tong').last);
+    await tester.pumpAndSettle();
+
+    final queryField = tester.widget<TextField>(find.byType(TextField).first);
+    expect(queryField.controller?.text, 'Kwun Tong elderly centre');
+    expect(controller.resourceRetrievalMode, 'local');
   });
 }
 
@@ -164,7 +323,8 @@ class _FailingLoginApi extends FakeApi {
   _FailingLoginApi();
 
   @override
-  Future<AuthSession> login({required String email, required String password}) async {
+  Future<AuthSession> login(
+      {required String email, required String password}) async {
     throw const ApiException('服務暫時未能連接。');
   }
 }

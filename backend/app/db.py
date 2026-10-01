@@ -46,6 +46,8 @@ def initialize_database(engine: Engine) -> None:
     from . import models  # noqa: F401
     from . import collaboration_models  # noqa: F401
     from . import memory_models, resource_models  # noqa: F401
+    from . import safety_models  # noqa: F401
+    from . import community_models, scam_models  # noqa: F401
 
     if engine.dialect.name == "postgresql":
         with engine.begin() as connection:

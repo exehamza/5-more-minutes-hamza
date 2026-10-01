@@ -24,7 +24,7 @@ A **Demo mode** label means conversations use predefined demonstration replies r
 2. Start a new conversation, type a message, and send it. You can also reopen an existing conversation.
 3. If the app proposes a care task, review its details before confirming it. It becomes a task only after confirmation.
 
-The current version supports text input. Cantonese voice input, voice calls, and scheduled morning greetings are not yet available. If sending fails, check your connection and retry rather than repeatedly creating the same task.
+You can type or tap the Cantonese voice-input button. Before first use in a chat, the app explains that recognition uses the device or browser speech service, which may process microphone audio under its own provider policy. Anxin receives recognized text, not an audio recording. Recognition prefers a Hong Kong Cantonese locale and may fall back to another installed Chinese locale. Review and edit the transcript before sending. Availability and accuracy depend on the device, browser, and installed language packs. Voice calls are not available. If sending fails, check your connection and retry rather than repeatedly creating the same task.
 
 ## 4. Save and manage memories
 
@@ -76,15 +76,23 @@ The tasks screen lists confirmed care tasks. Confirming a task does not contact 
 
 ## 8. Find Hong Kong resources
 
-Open the resources section and enter your need, or choose a suggested search for medical fee waivers, caregiver support, or day respite.
+Open the resources section and enter your need, or choose a suggested search for medical fee waivers, caregiver support, day respite, home care, community-care vouchers, or elderly centres. You can also choose one of the 18 districts to find the Social Welfare Department's official district/neighbourhood elderly-centre directory.
 
 Each result shows its title, verification date, official source link, and numbered next steps. Expand the service and eligibility section for details, or the application questions section to see information that still needs checking.
 
-Results are application guidance, not eligibility decisions. Open the official source and check its current requirements before applying. The collection contains six reviewed official records; it does not cover every subsidy or service in Hong Kong. If no result appears, try shorter keywords or contact the relevant organization directly.
+Results are application guidance, not eligibility decisions. Open the official source and check its current requirements before applying. The collection contains six reviewed official records; it does not cover every subsidy or service in Hong Kong. District search links to the official directory rather than a live centre database; call a centre to confirm opening hours, services, and vacancies. If no result appears, try shorter keywords or contact the relevant organization directly.
 
 The official resource content is currently stored in Traditional Chinese. Switching the app to English translates its controls, not these source records.
 
-## 9. Troubleshooting
+## 9. Reminders and safety assistance
+
+From **Account → Reminders and safety**, you can optionally enable a daily or weekly check-in and choose its time and (for weekly) day. Reminders are off by default and are scheduled on the current Android device; allow notification permission when prompted. Quiet hours are 9:00 PM–9:00 AM. Check-in times must be between 9:00 AM and 9:00 PM, and an already completed chat that day moves the next check-in forward. Due-task notifications are also opt-in and use generic lock-screen text. These settings do not sync to other devices.
+
+If an explicit danger phrase is detected in a chat message, the app displays support options without ending the conversation. This simple phrase check can miss or misinterpret statements; it is not a safety monitor or clinical assessment. You can choose to call 999, or select one authorized family-message recipient and review the exact message before confirming. Nobody is contacted automatically. Anxin is not an emergency service; in immediate danger, contact emergency services directly.
+
+Bookings, hospital contact, and welfare-application submission are not integrated. Resource results provide official links and next steps only.
+
+## 10. Troubleshooting
 
 | Problem | What to check |
 | --- | --- |
